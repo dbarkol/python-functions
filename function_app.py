@@ -2,6 +2,9 @@ import azure.functions as func
 import datetime
 import json
 import logging
+from azure.storage.blob import BlobServiceClient
+from azure.identity import DefaultAzureCredential
+from urllib.parse import urlparse
 
 app = func.FunctionApp()
 
@@ -42,3 +45,26 @@ def EventGridTrigger(event: func.EventGridEvent):
     }
 
     logging.info(f'EventGrid event: {json.dumps(result)}')
+
+    # Retrieve the URI of the blob
+    event_data = event.get_json()
+    blob_url = event_data.get('url')
+
+    logging.info(f'Blob URL: {blob_url}')
+
+    parsed_url = urlparse(blob_url)
+    account_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+    path_parts = parsed_url.path.lstrip('/').split('/')
+    container_name = path_parts[0]
+    blob_name = '/'.join(path_parts[1:])
+
+    # Read the contents of the blob
+    try:
+
+        credential = DefaultAzureCredential()
+        blob_service_client = BlobServiceClient(account_url=account_url, credential=credential)
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+
+    except Exception as e:
+        logging.error(f'Error reading blob content: {str(e)}')
+        return func.HttpResponse(f'Error reading blob content: {str(e)}', status_code=500)
